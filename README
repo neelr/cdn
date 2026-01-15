@@ -5,7 +5,7 @@ cdn.neelr.dev
 ## cli
 
 ```bash
-curl -fsSL https://cdn.neelr.dev/beOtTN.sh | bash
+curl -fsSL https://cdn.neelr.dev/b0XdfX.sh | bash
 ```
 
 then:
@@ -15,6 +15,17 @@ cdn file.png                # upload (default action)
 cdn file.png -e 7d          # upload with 7 day expiry
 cdn -l                      # list files
 cdn -d <key>                # delete
+```
+
+## screenshot auto-upload (macos)
+
+automatically upload screenshots and copy link to clipboard:
+
+```bash
+cdn --install-screenshot              # watch ~/Desktop (default)
+cdn --install-screenshot ~/Screenshots # watch custom folder
+cdn --uninstall-screenshot            # remove
+cdn --toggle-delete                   # toggle delete after upload (default: on)
 ```
 
 ## api

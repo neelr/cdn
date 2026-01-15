@@ -3,7 +3,25 @@ set -e
 
 CDN_URL="https://cdn.neelr.dev"
 CONFIG_DIR="$HOME/.config/cdn"
-TOKEN_FILE="$CONFIG_DIR/token"
+CONFIG_FILE="$CONFIG_DIR/config"
+
+# Config helpers
+get_config() {
+  [ -f "$CONFIG_FILE" ] || return 1
+  grep "^$1=" "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-
+}
+
+set_config() {
+  mkdir -p "$CONFIG_DIR"
+  if [ -f "$CONFIG_FILE" ] && grep -q "^$1=" "$CONFIG_FILE" 2>/dev/null; then
+    # Update existing key
+    sed -i '' "s|^$1=.*|$1=$2|" "$CONFIG_FILE"
+  else
+    # Add new key
+    echo "$1=$2" >> "$CONFIG_FILE"
+  fi
+  chmod 600 "$CONFIG_FILE"
+}
 
 # Colors
 RED='\033[0;31m'
@@ -17,8 +35,9 @@ success() { echo -e "${GREEN}$1${NC}"; }
 info() { echo -e "${BLUE}$1${NC}"; }
 
 get_token() {
-  [ -f "$TOKEN_FILE" ] || error "Not logged in. Run: cdn --login <token>"
-  cat "$TOKEN_FILE"
+  local token=$(get_config "token")
+  [ -n "$token" ] || error "Not logged in. Run: cdn --login <token>"
+  echo "$token"
 }
 
 json_value() {
@@ -38,6 +57,11 @@ USAGE:
   cdn -o, --open <key>        Open file URL in browser
   cdn -h, --help              Show this help
 
+SCREENSHOT AUTO-UPLOAD (macOS):
+  cdn --install-screenshot [dir]  Install daemon (default: ~/Desktop)
+  cdn --uninstall-screenshot      Remove auto-upload daemon
+  cdn --toggle-delete             Toggle delete screenshot after upload
+
 EXPIRY OPTIONS:
   -e 30m   Expire in 30 minutes
   -e 2h    Expire in 2 hours
@@ -50,6 +74,8 @@ EXAMPLES:
   cdn --login abc123...
   cdn -l
   cdn -d x7k2m9.png
+  cdn --install-screenshot
+  cdn --install-screenshot ~/Screenshots
 EOF
 }
 
@@ -61,9 +87,7 @@ do_login() {
     -d "{\"token\":\"$1\"}")
 
   if echo "$response" | grep -q '"files"'; then
-    mkdir -p "$CONFIG_DIR"
-    echo "$1" > "$TOKEN_FILE"
-    chmod 600 "$TOKEN_FILE"
+    set_config "token" "$1"
     success "Logged in!"
   else
     error "Invalid token"
@@ -173,6 +197,106 @@ do_open() {
   fi
 }
 
+install_screenshot() {
+  local watch_dir="${1:-$HOME/Desktop}"
+
+  # macOS only
+  [[ "$OSTYPE" == "darwin"* ]] || error "Screenshot auto-upload is macOS only"
+
+  # Check token exists
+  local token=$(get_config "token")
+  [ -n "$token" ] || error "Not logged in. Run: cdn --login <token>"
+
+  # Expand and validate watch directory
+  watch_dir="${watch_dir/#\~/$HOME}"
+  [ -d "$watch_dir" ] || error "Directory not found: $watch_dir"
+
+  local daemon_url="https://cdn.neelr.dev/7IhA0E.sh"
+  local daemon_dest="$CONFIG_DIR/screenshot-daemon.sh"
+  local plist_path="$HOME/Library/LaunchAgents/com.cdn.screenshot.plist"
+
+  # Create config dir if needed
+  mkdir -p "$CONFIG_DIR"
+  mkdir -p "$HOME/Library/LaunchAgents"
+
+  # Save watch directory to config
+  set_config "screenshot_watch_dir" "$watch_dir"
+
+  # Download daemon script from CDN
+  info "Downloading screenshot daemon..."
+  curl -s "$daemon_url" -o "$daemon_dest" || error "Failed to download daemon script"
+  chmod +x "$daemon_dest"
+
+  # Generate LaunchAgent plist (uses osascript + Finder for Desktop access)
+  cat > "$plist_path" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cdn.screenshot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/osascript</string>
+    <string>-e</string>
+    <string>tell application "Finder" to get files of desktop</string>
+    <string>-e</string>
+    <string>do shell script "$daemon_dest"</string>
+  </array>
+  <key>WatchPaths</key>
+  <array>
+    <string>$watch_dir</string>
+  </array>
+  <key>StandardOutPath</key>
+  <string>$HOME/Library/Logs/cdn-screenshot.log</string>
+  <key>StandardErrorPath</key>
+  <string>$HOME/Library/Logs/cdn-screenshot.log</string>
+</dict>
+</plist>
+EOF
+
+  # Load the agent
+  launchctl load "$plist_path"
+
+  # Trigger Finder permission request
+  info "Requesting Desktop access..."
+  osascript -e 'tell application "Finder" to get files of desktop' >/dev/null 2>&1 || true
+
+  success "Screenshot auto-upload installed!"
+  info "Watching: $watch_dir"
+  info "Take a screenshot (Cmd+Shift+4) and the link will be copied to your clipboard."
+}
+
+uninstall_screenshot() {
+  local plist_path="$HOME/Library/LaunchAgents/com.cdn.screenshot.plist"
+
+  # Unload if running
+  launchctl unload "$plist_path" 2>/dev/null || true
+
+  # Remove files
+  rm -f "$plist_path"
+  rm -f "$CONFIG_DIR/screenshot-daemon.sh"
+
+  # Remove screenshot config keys (but keep token)
+  if [ -f "$CONFIG_FILE" ]; then
+    sed -i '' '/^screenshot_watch_dir=/d' "$CONFIG_FILE"
+    sed -i '' '/^last_screenshot=/d' "$CONFIG_FILE"
+  fi
+
+  success "Screenshot auto-upload uninstalled"
+}
+
+toggle_delete() {
+  local current=$(get_config "delete_after_upload")
+  if [ "$current" = "false" ]; then
+    set_config "delete_after_upload" "true"
+    success "Delete after upload: ON"
+  else
+    set_config "delete_after_upload" "false"
+    success "Delete after upload: OFF"
+  fi
+}
+
 # Parse arguments
 [ $# -eq 0 ] && { show_help; exit 0; }
 
@@ -191,6 +315,12 @@ while [ $# -gt 0 ]; do
       do_delete "$2"; exit 0 ;;
     -o|--open)
       do_open "$2"; exit 0 ;;
+    --install-screenshot)
+      install_screenshot "$2"; exit 0 ;;
+    --uninstall-screenshot)
+      uninstall_screenshot; exit 0 ;;
+    --toggle-delete)
+      toggle_delete; exit 0 ;;
     -e|--expires)
       val="$2"
       if [[ "$val" =~ ^([0-9]+)m$ ]]; then
