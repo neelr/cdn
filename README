@@ -2,6 +2,21 @@ a cdn for myself and possibly friends. reach out if you want to be added!
 
 cdn.neelr.dev
 
+## cli
+
+```bash
+curl -fsSL https://cdn.neelr.dev/beOtTN.sh | bash
+```
+
+then:
+```bash
+cdn --login <your-token>
+cdn file.png                # upload (default action)
+cdn file.png -e 7d          # upload with 7 day expiry
+cdn -l                      # list files
+cdn -d <key>                # delete
+```
+
 ## api
 
 all endpoints require a valid token.

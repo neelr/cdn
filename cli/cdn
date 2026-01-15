@@ -1,0 +1,216 @@
+#!/bin/bash
+set -e
+
+CDN_URL="https://cdn.neelr.dev"
+CONFIG_DIR="$HOME/.config/cdn"
+TOKEN_FILE="$CONFIG_DIR/token"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+error() { echo -e "${RED}error:${NC} $1" >&2; exit 1; }
+success() { echo -e "${GREEN}$1${NC}"; }
+info() { echo -e "${BLUE}$1${NC}"; }
+
+get_token() {
+  [ -f "$TOKEN_FILE" ] || error "Not logged in. Run: cdn --login <token>"
+  cat "$TOKEN_FILE"
+}
+
+json_value() {
+  local key="$1"
+  grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/'
+}
+
+show_help() {
+  cat <<EOF
+cdn - CLI for cdn.neelr.dev
+
+USAGE:
+  cdn <file> [-e EXPIRY]      Upload a file (default action)
+  cdn --login <token>         Save your API token
+  cdn -l, --list              List your files
+  cdn -d, --delete <key>      Delete a file
+  cdn -o, --open <key>        Open file URL in browser
+  cdn -h, --help              Show this help
+
+EXPIRY OPTIONS:
+  -e 30m   Expire in 30 minutes
+  -e 2h    Expire in 2 hours
+  -e 7d    Expire in 7 days
+  -e 3600000   Raw milliseconds
+
+EXAMPLES:
+  cdn screenshot.png
+  cdn video.mp4 -e 7d
+  cdn --login abc123...
+  cdn -l
+  cdn -d x7k2m9.png
+EOF
+}
+
+do_login() {
+  [ -z "$1" ] && error "Usage: cdn --login <token>"
+
+  response=$(curl -s -X POST "$CDN_URL/api/list" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$1\"}")
+
+  if echo "$response" | grep -q '"files"'; then
+    mkdir -p "$CONFIG_DIR"
+    echo "$1" > "$TOKEN_FILE"
+    chmod 600 "$TOKEN_FILE"
+    success "Logged in!"
+  else
+    error "Invalid token"
+  fi
+}
+
+do_upload() {
+  local file="$1"
+  local expiry="$2"
+
+  [ -f "$file" ] || error "File not found: $file"
+
+  local token=$(get_token)
+
+  info "Uploading $(basename "$file")..."
+
+  local curl_args=(-s -X POST "$CDN_URL/api/upload" -F "token=$token" -F "file=@$file")
+  [ -n "$expiry" ] && curl_args+=(-F "expiry=$expiry")
+
+  response=$(curl "${curl_args[@]}")
+
+  if echo "$response" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
+    url=$(echo "$response" | json_value "url")
+    success "${CDN_URL}${url}"
+
+    if command -v pbcopy &>/dev/null; then
+      echo -n "${CDN_URL}${url}" | pbcopy
+      echo "(copied)"
+    elif command -v xclip &>/dev/null; then
+      echo -n "${CDN_URL}${url}" | xclip -selection clipboard
+      echo "(copied)"
+    fi
+  else
+    error "Upload failed: $response"
+  fi
+}
+
+do_list() {
+  local token=$(get_token)
+
+  response=$(curl -s -X POST "$CDN_URL/api/list" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$token\"}")
+
+  if ! echo "$response" | grep -q '"files"'; then
+    error "Failed to list files"
+  fi
+
+  if echo "$response" | grep -q '"files"[[:space:]]*:[[:space:]]*\[\]'; then
+    info "No files yet"
+    return
+  fi
+
+  printf "${BLUE}%-30s  %10s  %-12s  %s${NC}\n" "NAME" "SIZE" "EXPIRES" "URL"
+  printf "%-30s  %10s  %-12s  %s\n" "──────────────────────────────" "──────────" "────────────" "───────────────"
+
+  echo "$response" | grep -o '{[^{}]*"url"[^{}]*}' | while read -r file; do
+    name=$(echo "$file" | json_value "originalName")
+    size=$(echo "$file" | grep -o '"size"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*$')
+    expires=$(echo "$file" | json_value "expires")
+    url=$(echo "$file" | json_value "url")
+
+    if [ -n "$size" ]; then
+      if [ "$size" -ge 1048576 ]; then
+        size="$(( size / 1048576 )) MB"
+      elif [ "$size" -ge 1024 ]; then
+        size="$(( size / 1024 )) KB"
+      else
+        size="$size B"
+      fi
+    fi
+
+    [ ${#name} -gt 28 ] && name="${name:0:25}..."
+    [ "$expires" = "null" ] || [ -z "$expires" ] && expires="-" || expires="${expires:0:10}"
+
+    printf "%-30s  %10s  %-12s  %s\n" "$name" "$size" "$expires" "$url"
+  done
+}
+
+do_delete() {
+  [ -z "$1" ] && error "Usage: cdn -d <key>"
+
+  local token=$(get_token)
+
+  response=$(curl -s -X POST "$CDN_URL/api/delete" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$token\",\"key\":\"$1\"}")
+
+  if echo "$response" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
+    success "Deleted $1"
+  else
+    error "Failed to delete: $response"
+  fi
+}
+
+do_open() {
+  [ -z "$1" ] && error "Usage: cdn -o <key>"
+
+  local url="${CDN_URL}/$1"
+
+  if command -v open &>/dev/null; then
+    open "$url"
+  elif command -v xdg-open &>/dev/null; then
+    xdg-open "$url"
+  else
+    info "$url"
+  fi
+}
+
+# Parse arguments
+[ $# -eq 0 ] && { show_help; exit 0; }
+
+file=""
+expiry=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      show_help; exit 0 ;;
+    --login)
+      do_login "$2"; exit 0 ;;
+    -l|--list)
+      do_list; exit 0 ;;
+    -d|--delete)
+      do_delete "$2"; exit 0 ;;
+    -o|--open)
+      do_open "$2"; exit 0 ;;
+    -e|--expires)
+      val="$2"
+      if [[ "$val" =~ ^([0-9]+)m$ ]]; then
+        expiry=$(( ${BASH_REMATCH[1]} * 60000 ))
+      elif [[ "$val" =~ ^([0-9]+)h$ ]]; then
+        expiry=$(( ${BASH_REMATCH[1]} * 3600000 ))
+      elif [[ "$val" =~ ^([0-9]+)d$ ]]; then
+        expiry=$(( ${BASH_REMATCH[1]} * 86400000 ))
+      elif [[ "$val" =~ ^[0-9]+$ ]]; then
+        expiry="$val"
+      else
+        error "Invalid expiry. Use: 30m, 2h, 7d, or milliseconds"
+      fi
+      shift 2 ;;
+    -*)
+      error "Unknown option: $1" ;;
+    *)
+      file="$1"; shift ;;
+  esac
+done
+
+# Default action: upload
+[ -n "$file" ] && do_upload "$file" "$expiry"
