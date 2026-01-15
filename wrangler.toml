@@ -10,3 +10,6 @@ bucket_name = "cdn-storage"
 binding = "DB"
 database_name = "cdn_db"
 database_id = "f68d9337-6388-4bbe-a205-5563e9435da5"
+
+[triggers]
+crons = ["*/5 * * * *"]
