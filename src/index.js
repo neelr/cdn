@@ -53,7 +53,7 @@ function loginPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>cdn</title>
+  <title>cdn.</title>
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
@@ -104,7 +104,7 @@ function dashboardPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>cdn</title>
+  <title>dash.</title>
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; }
@@ -224,7 +224,7 @@ function adminPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>cdn admin</title>
+  <title>admin.</title>
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
