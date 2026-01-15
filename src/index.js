@@ -65,9 +65,9 @@ function loginPage() {
 </head>
 <body>
     <h1>cdn.</h1>
-  <input type="password" id="token" placeholder="Enter token">
-  <button onclick="login()">Login</button>
-  <p class="error" id="error">Invalid token</p>
+  <input type="password" id="token" placeholder="enter token">
+  <button onclick="login()">login</button>
+  <p class="error" id="error">invalid token</p>
   <script>
     // Redirect if already logged in
     if (sessionStorage.getItem('token')) {
@@ -112,31 +112,42 @@ function dashboardPage() {
     th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
     th { background: #f5f5f5; }
     input[type="file"] { margin: 10px 0; }
+    select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-right: 10px; }
     button { padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
     button:hover { background: #333; }
     button:disabled { background: #ccc; }
     .upload-section { background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     a { color: #0066cc; }
     .logout { float: right; background: #666; }
+    .admin-btn { float: right; background: #0066cc; margin-right: 10px; display: none; }
+    .admin-btn:hover { background: #0052a3; }
     .empty { color: #666; font-style: italic; }
   </style>
 </head>
 <body>
-  <button class="logout" onclick="logout()">Logout</button>
+  <button class="logout" onclick="logout()">logout</button>
+  <button class="admin-btn" id="adminBtn" onclick="window.location.href='/admin'">admin</button>
     <h1>cdn.</h1>
 
   <div class="upload-section">
     <input type="file" id="file">
-    <button onclick="upload()" id="uploadBtn">Upload</button>
+    <select id="expiry">
+      <option value="">never expires</option>
+      <option value="3600000">1 hour</option>
+      <option value="86400000">1 day</option>
+      <option value="604800000">7 days</option>
+      <option value="2592000000">30 days</option>
+    </select>
+    <button onclick="upload()" id="uploadBtn">upload</button>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>URL</th>
-        <th>Original Name</th>
-        <th>Size</th>
-        <th>Uploaded</th>
+        <th>url</th>
+        <th>original name</th>
+        <th>size</th>
+        <th>uploaded</th>
       </tr>
     </thead>
     <tbody id="files"></tbody>
@@ -145,6 +156,11 @@ function dashboardPage() {
   <script>
     const token = sessionStorage.getItem('token');
     if (!token) window.location.href = '/';
+
+    // Show admin button if user is admin
+    if (sessionStorage.getItem('isAdmin') === '1') {
+      document.getElementById('adminBtn').style.display = 'block';
+    }
 
     async function loadFiles() {
       const res = await fetch('/api/list', {
@@ -161,7 +177,7 @@ function dashboardPage() {
       const files = data.files;
       const tbody = document.getElementById('files');
       if (files.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty">No files uploaded yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">no files uploaded yet</td></tr>';
         return;
       }
       tbody.innerHTML = files.map(f => \`
@@ -182,27 +198,29 @@ function dashboardPage() {
 
     async function upload() {
       const file = document.getElementById('file').files[0];
-      if (!file) return alert('Select a file');
+      if (!file) return alert('select a file');
 
       const btn = document.getElementById('uploadBtn');
       btn.disabled = true;
-      btn.textContent = 'Uploading...';
+      btn.textContent = 'uploading...';
 
+      const expiry = document.getElementById('expiry').value;
       const formData = new FormData();
       formData.append('token', token);
       formData.append('file', file);
+      if (expiry) formData.append('expiry', expiry);
 
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
 
       btn.disabled = false;
-      btn.textContent = 'Upload';
+      btn.textContent = 'upload';
 
       if (data.success) {
         document.getElementById('file').value = '';
         loadFiles();
       } else {
-        alert('Upload failed: ' + data.error);
+        alert('upload failed: ' + data.error);
       }
     }
 
@@ -236,6 +254,8 @@ function adminPage() {
     button.danger { background: #c00; }
     button.danger:hover { background: #900; }
     .logout { float: right; background: #666; }
+    .dash-btn { float: right; background: #0066cc; margin-right: 10px; }
+    .dash-btn:hover { background: #0052a3; }
     .create-section { background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin: 10px 0; resize: vertical; }
     .token-display { font-family: monospace; background: #e0ffe0; padding: 10px; border-radius: 4px; margin: 10px 0; word-break: break-all; display: none; }
@@ -246,26 +266,27 @@ function adminPage() {
   </style>
 </head>
 <body>
-  <button class="logout" onclick="logout()">Logout</button>
+  <button class="logout" onclick="logout()">logout</button>
+  <button class="dash-btn" onclick="window.location.href='/dash'">dash</button>
   <h1>admin.</h1>
 
   <div class="create-section">
-    <h3>Create Token</h3>
-    <textarea id="note" placeholder="Note (e.g. who this token is for)" rows="2"></textarea>
-    <button onclick="createToken()">Create Token</button>
+    <h3>create token</h3>
+    <textarea id="note" placeholder="note (e.g. who this token is for)" rows="2"></textarea>
+    <button onclick="createToken()">create token</button>
     <div class="token-display" id="newToken"></div>
   </div>
 
-  <h3>Tokens</h3>
+  <h3>tokens</h3>
   <table>
     <thead>
       <tr>
-        <th>Token</th>
-        <th>Note</th>
-        <th>Admin</th>
-        <th>Usage</th>
-        <th>Created</th>
-        <th>Actions</th>
+        <th>token</th>
+        <th>note</th>
+        <th>admin</th>
+        <th>usage</th>
+        <th>created</th>
+        <th>actions</th>
       </tr>
     </thead>
     <tbody id="tokens"></tbody>
@@ -289,7 +310,7 @@ function adminPage() {
       const tokens = await res.json();
       const tbody = document.getElementById('tokens');
       if (tokens.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty">No tokens yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">no tokens yet</td></tr>';
         return;
       }
       tbody.innerHTML = tokens.map(t => \`
@@ -300,8 +321,8 @@ function adminPage() {
           <td>\${formatSize(t.usage)}</td>
           <td>\${new Date(t.created).toLocaleDateString()}</td>
           <td>
-            <button onclick="refreshToken('\${t.token}')">Refresh</button>
-            <button class="danger" onclick="deleteToken('\${t.token}')">Delete</button>
+            <button onclick="refreshToken('\${t.token}')">refresh</button>
+            <button class="danger" onclick="deleteToken('\${t.token}')">delete</button>
           </td>
         </tr>
       \`).join('');
@@ -320,7 +341,7 @@ function adminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, targetToken, note, isAdmin })
       });
-      if (!res.ok) alert('Failed to update');
+      if (!res.ok) alert('failed to update');
     }
 
     async function createToken() {
@@ -334,15 +355,15 @@ function adminPage() {
       if (data.success) {
         document.getElementById('note').value = '';
         document.getElementById('newToken').style.display = 'block';
-        document.getElementById('newToken').textContent = 'New token: ' + data.newToken;
+        document.getElementById('newToken').textContent = 'new token: ' + data.newToken;
         loadTokens();
       } else {
-        alert('Failed: ' + data.error);
+        alert('failed: ' + data.error);
       }
     }
 
     async function refreshToken(oldToken) {
-      if (!confirm('Generate new token? The old one will stop working.')) return;
+      if (!confirm('generate new token? the old one will stop working.')) return;
       const res = await fetch('/api/admin/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -351,15 +372,15 @@ function adminPage() {
       const data = await res.json();
       if (data.success) {
         document.getElementById('newToken').style.display = 'block';
-        document.getElementById('newToken').textContent = 'New token: ' + data.newToken;
+        document.getElementById('newToken').textContent = 'new token: ' + data.newToken;
         loadTokens();
       } else {
-        alert('Failed: ' + data.error);
+        alert('failed: ' + data.error);
       }
     }
 
     async function deleteToken(targetToken) {
-      if (!confirm('Delete this token and ALL its files? This cannot be undone.')) return;
+      if (!confirm('delete this token and all its files? this cannot be undone.')) return;
       const res = await fetch('/api/admin/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -369,7 +390,7 @@ function adminPage() {
       if (data.success) {
         loadTokens();
       } else {
-        alert('Failed: ' + data.error);
+        alert('failed: ' + data.error);
       }
     }
 
@@ -539,6 +560,7 @@ export default {
       const formData = await request.formData();
       const token = formData.get('token');
       const file = formData.get('file');
+      const expiryMs = formData.get('expiry');
 
       if (!await isValidToken(token, env.DB)) {
         return Response.json({ success: false, error: 'Invalid token' }, { status: 401 });
@@ -550,6 +572,7 @@ export default {
 
       const ext = getExtension(file.name);
       const owner = hashToken(token);
+      const expires = expiryMs ? new Date(Date.now() + parseInt(expiryMs)).toISOString() : null;
       let key, attempts = 0;
 
       // Generate unique key (check DB instead of R2)
@@ -569,8 +592,8 @@ export default {
 
       // Insert into DB
       await env.DB.prepare(
-        'INSERT INTO files (key, owner, original_name, content_type, size) VALUES (?, ?, ?, ?, ?)'
-      ).bind(key, owner, file.name, file.type || 'application/octet-stream', file.size).run();
+        'INSERT INTO files (key, owner, original_name, content_type, size, expires) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(key, owner, file.name, file.type || 'application/octet-stream', file.size, expires).run();
 
       return Response.json({ success: true, url: '/' + key });
     }
@@ -604,5 +627,25 @@ export default {
     }
 
     return new Response('Not Found', { status: 404 });
+  },
+
+  // Cron handler to delete expired files
+  async scheduled(event, env, ctx) {
+    const now = new Date().toISOString();
+
+    // Get all expired files
+    const { results: expiredFiles } = await env.DB.prepare(
+      'SELECT key FROM files WHERE expires IS NOT NULL AND expires < ?'
+    ).bind(now).all();
+
+    if (expiredFiles.length === 0) return;
+
+    // Delete from R2 and DB
+    for (const file of expiredFiles) {
+      await env.CDN_BUCKET.delete(file.key);
+      await env.DB.prepare('DELETE FROM files WHERE key = ?').bind(file.key).run();
+    }
+
+    console.log(`Deleted ${expiredFiles.length} expired files`);
   }
 };
