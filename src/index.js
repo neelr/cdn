@@ -124,6 +124,8 @@ function dashboardPage() {
     .empty { color: #666; font-style: italic; }
     .delete-btn { padding: 5px 10px; background: #c00; font-size: 12px; }
     .delete-btn:hover { background: #900; }
+    footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 14px; }
+    footer a { color: #666; }
     .upload-success { font-family: monospace; background: #e0ffe0; padding: 10px; border-radius: 4px; margin-top: 10px; word-break: break-all; display: none; }
     .upload-success a { color: #0066cc; }
     .copy-btn { padding: 5px 10px; margin-left: 10px; font-size: 12px; background: #28a745; }
@@ -267,6 +269,7 @@ function dashboardPage() {
 
     loadFiles();
   </script>
+  <footer><a href="/api">api docs</a></footer>
 </body>
 </html>`;
 }
@@ -459,6 +462,33 @@ export default {
     // Admin page
     if (path === '/admin' && request.method === 'GET') {
       return new Response(adminPage(), { headers: { 'Content-Type': 'text/html' } });
+    }
+
+    // API docs
+    if (path === '/api' && request.method === 'GET') {
+      const docs = `cdn api
+
+all endpoints require a valid token.
+
+POST /api/upload
+  upload a file
+  body: multipart/form-data
+    - token: string (required)
+    - file: file (required)
+    - expiry: number (optional, ms until expiration: 3600000=1h, 86400000=1d, 604800000=7d, 2592000000=30d)
+  response: { success: true, url: "/abc123.png" }
+
+POST /api/list
+  list your files
+  body: { "token": "your-token" }
+  response: { files: [{ url, originalName, size, uploaded, expires }], isAdmin: bool }
+
+POST /api/delete
+  delete a file
+  body: { "token": "your-token", "key": "abc123.png" }
+  response: { success: true }
+`;
+      return new Response(docs, { headers: { 'Content-Type': 'text/plain' } });
     }
 
     // API: Admin - list tokens with usage

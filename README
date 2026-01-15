@@ -1,3 +1,25 @@
 a cdn for myself and possibly friends. reach out if you want to be added!
 
 cdn.neelr.dev
+
+## api
+
+all endpoints require a valid token.
+
+POST /api/upload
+  upload a file
+  body: multipart/form-data
+    - token: string (required)
+    - file: file (required)
+    - expiry: number (optional, ms until expiration: 3600000=1h, 86400000=1d, 604800000=7d, 2592000000=30d)
+  response: { success: true, url: "/abc123.png" }
+
+POST /api/list
+  list your files
+  body: { "token": "your-token" }
+  response: { files: [{ url, originalName, size, uploaded, expires }], isAdmin: bool }
+
+POST /api/delete
+  delete a file
+  body: { "token": "your-token", "key": "abc123.png" }
+  response: { success: true }
