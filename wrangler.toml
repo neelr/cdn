@@ -1,0 +1,12 @@
+name = "cdn"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "CDN_BUCKET"
+bucket_name = "cdn-storage"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cdn_db"
+database_id = "f68d9337-6388-4bbe-a205-5563e9435da5"
