@@ -111,6 +111,7 @@ function dashboardPage() {
     table { width: 100%; border-collapse: collapse; margin: 20px 0; }
     th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
     th { background: #f5f5f5; }
+    .filename { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
     input[type="file"] { margin: 10px 0; }
     select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-right: 10px; }
     button { padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
@@ -208,7 +209,7 @@ function dashboardPage() {
       }
       tbody.innerHTML = files.map(f => \`
         <tr>
-          <td><a href="\${f.url}" target="_blank">\${f.originalName}</a></td>
+          <td><a href="\${f.url}" target="_blank" class="filename" title="\${f.originalName}">\${f.originalName}</a></td>
           <td>\${formatSize(f.size)}</td>
           <td>\${new Date(f.uploaded).toLocaleString()}</td>
           <td>\${f.expires ? new Date(f.expires).toLocaleString() : 'never'}</td>
@@ -727,7 +728,7 @@ POST /api/delete
 
       const headers = new Headers();
       headers.set('Content-Type', fileInfo.content_type);
-      headers.set('Content-Disposition', `inline; filename="${fileInfo.original_name}"`);
+      headers.set('Content-Disposition', `inline; filename="${fileInfo.original_name.replace(/"/g, '\\"')}"`);
 
       return new Response(object.body, { headers });
     }
