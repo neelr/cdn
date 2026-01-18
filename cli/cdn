@@ -13,11 +13,30 @@ get_config() {
 
 set_config() {
   mkdir -p "$CONFIG_DIR"
+
+  # Check if key exists and get current value
+  local current_value=""
   if [ -f "$CONFIG_FILE" ] && grep -q "^$1=" "$CONFIG_FILE" 2>/dev/null; then
+    current_value=$(grep "^$1=" "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
+
+    # If value is different, prompt for confirmation
+    if [ "$current_value" != "$2" ]; then
+      echo -e "${YELLOW}Configuration change:${NC}"
+      echo "  $1: $current_value → $2"
+      echo -n "Overwrite? (y/n) [n]: "
+      read -r response
+
+      # Default to 'n' if empty, only proceed if 'y' or 'Y'
+      if [ "$response" != "y" ] && [ "$response" != "Y" ]; then
+        info "Cancelled - config unchanged"
+        exit 0
+      fi
+    fi
+
     # Update existing key
     sed -i '' "s|^$1=.*|$1=$2|" "$CONFIG_FILE"
   else
-    # Add new key
+    # Add new key (no confirmation needed for new values)
     echo "$1=$2" >> "$CONFIG_FILE"
   fi
   chmod 600 "$CONFIG_FILE"
@@ -311,7 +330,8 @@ do_open() {
 }
 
 install_screenshot() {
-  local watch_dir="${1:-$HOME/Desktop}"
+  local input_dir="$1"
+  local watch_dir
 
   # macOS only
   [[ "$OSTYPE" == "darwin"* ]] || error "Screenshot auto-upload is macOS only"
@@ -319,6 +339,16 @@ install_screenshot() {
   # Check token exists
   local token=$(get_config "token")
   [ -n "$token" ] || error "Not logged in. Run: cdn --login <token>"
+
+  # Determine watch directory: explicit arg > existing config > default
+  if [ -n "$input_dir" ]; then
+    watch_dir="$input_dir"
+  else
+    watch_dir=$(get_config "screenshot_watch_dir")
+    if [ -z "$watch_dir" ]; then
+      watch_dir="$HOME/Desktop"
+    fi
+  fi
 
   # Expand and validate watch directory
   watch_dir="${watch_dir/#\~/$HOME}"
@@ -332,8 +362,10 @@ install_screenshot() {
   mkdir -p "$CONFIG_DIR"
   mkdir -p "$HOME/Library/LaunchAgents"
 
-  # Save watch directory to config
-  set_config "screenshot_watch_dir" "$watch_dir"
+  # Only save to config if explicitly provided or no config exists
+  if [ -n "$input_dir" ] || [ -z "$(get_config 'screenshot_watch_dir')" ]; then
+    set_config "screenshot_watch_dir" "$watch_dir"
+  fi
 
   # Download daemon script from CDN
   info "Downloading screenshot daemon..."

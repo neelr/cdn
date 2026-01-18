@@ -17,7 +17,7 @@ echo -e "${BLUE}Installing cdn CLI...${NC}"
 mkdir -p "$INSTALL_DIR"
 
 # Download the CLI script
-curl -fsSL "$CDN_URL/beArId" -o "$INSTALL_PATH"
+curl -fsSL "$CDN_URL/KMIAnC" -o "$INSTALL_PATH"
 chmod +x "$INSTALL_PATH"
 
 echo -e "${GREEN}cdn installed to $INSTALL_PATH${NC}"
