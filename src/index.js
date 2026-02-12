@@ -89,6 +89,9 @@ export default {
     if (path === '/api/delete' && request.method === 'POST') {
       return addCorsHeaders(await api.handleDelete(request, env));
     }
+    if (path === '/api/rename' && request.method === 'POST') {
+      return addCorsHeaders(await api.handleRename(request, env));
+    }
 
     // Serve files (GET requests to /{key})
     if (request.method === 'GET') {
