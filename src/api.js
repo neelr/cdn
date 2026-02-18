@@ -292,6 +292,32 @@ export async function handleDelete(request, env) {
   return Response.json({ success: true });
 }
 
+// Rename file (update original_name)
+export async function handleRename(request, env) {
+  const { token, key, newName } = await request.json();
+
+  const auth = await requireAuth(token, env.DB);
+  if (!auth.authorized) return auth.response;
+
+  if (!newName || !newName.trim()) {
+    return Response.json({ success: false, error: 'Name cannot be empty' }, { status: 400 });
+  }
+
+  const file = await env.DB.prepare(
+    'SELECT key FROM files WHERE key = ? AND owner = ?'
+  ).bind(key, auth.owner).first();
+
+  if (!file) {
+    return Response.json({ success: false, error: 'File not found' }, { status: 404 });
+  }
+
+  await env.DB.prepare(
+    'UPDATE files SET original_name = ? WHERE key = ?'
+  ).bind(newName.trim(), key).run();
+
+  return Response.json({ success: true });
+}
+
 // Serve file with caching headers
 export async function handleServeFile(request, env, key) {
   // Get metadata from DB first (including expires for cache calculation)

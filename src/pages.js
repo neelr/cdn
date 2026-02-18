@@ -77,6 +77,14 @@ export function dashboardPage() {
     .empty { color: #666; font-style: italic; }
     .delete-btn { padding: 5px 10px; background: #c00; font-size: 12px; }
     .delete-btn:hover { background: #900; }
+    .edit-btn { padding: 5px 10px; background: #666; font-size: 12px; margin-right: 5px; }
+    .edit-btn:hover { background: #444; }
+    .filename-cell { display: flex; align-items: center; gap: 8px; }
+    .filename-input { flex: 1; padding: 4px 8px; border: 1px solid #0066cc; border-radius: 4px; font-size: 14px; }
+    .save-btn { padding: 5px 10px; background: #28a745; font-size: 12px; }
+    .save-btn:hover { background: #218838; }
+    .cancel-btn { padding: 5px 10px; background: #666; font-size: 12px; }
+    .cancel-btn:hover { background: #444; }
     #search { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
     footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 14px; }
     footer a { color: #666; }
@@ -166,14 +174,87 @@ export function dashboardPage() {
         return;
       }
       tbody.innerHTML = files.map(f => \`
-        <tr>
-          <td><a href="\${f.url}" target="_blank" class="filename" title="\${f.originalName}">\${f.originalName}</a></td>
+        <tr data-key="\${f.url.substring(1)}">
+          <td class="filename-cell" data-original="\${escapeHtml(f.originalName)}">
+            <a href="\${f.url}" target="_blank" class="filename" title="\${escapeHtml(f.originalName)}">\${escapeHtml(f.originalName)}</a>
+            <button class="edit-btn" onclick="startEdit(this)" title="edit name">✎</button>
+          </td>
           <td>\${formatSize(f.size)}</td>
           <td>\${new Date(f.uploaded).toLocaleString()}</td>
           <td>\${f.expires ? new Date(f.expires).toLocaleString() : 'never'}</td>
           <td><button class="delete-btn" onclick="deleteFile('\${f.url}')">✕</button></td>
         </tr>
       \`).join('');
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function startEdit(btn) {
+      const cell = btn.closest('.filename-cell');
+      const originalName = cell.dataset.original;
+      const key = btn.closest('tr').dataset.key;
+      cell.innerHTML = \`
+        <input type="text" class="filename-input" value="\${escapeHtml(originalName)}" onkeydown="handleEditKey(event, this)">
+        <button class="save-btn" onclick="saveEdit(this)">✓</button>
+        <button class="cancel-btn" onclick="cancelEdit(this, '\${escapeHtml(originalName)}')">✕</button>
+      \`;
+      cell.querySelector('.filename-input').focus();
+      cell.querySelector('.filename-input').select();
+    }
+
+    function handleEditKey(event, input) {
+      if (event.key === 'Enter') {
+        saveEdit(input);
+      } else if (event.key === 'Escape') {
+        const cell = input.closest('.filename-cell');
+        cancelEdit(input, cell.dataset.original);
+      }
+    }
+
+    function cancelEdit(el, originalName) {
+      const cell = el.closest('.filename-cell');
+      const key = el.closest('tr').dataset.key;
+      cell.innerHTML = \`
+        <a href="/\${key}" target="_blank" class="filename" title="\${escapeHtml(originalName)}">\${escapeHtml(originalName)}</a>
+        <button class="edit-btn" onclick="startEdit(this)" title="edit name">✎</button>
+      \`;
+    }
+
+    async function saveEdit(el) {
+      const cell = el.closest('.filename-cell');
+      const input = cell.querySelector('.filename-input');
+      const newName = input.value.trim();
+      const originalName = cell.dataset.original;
+      const key = el.closest('tr').dataset.key;
+
+      if (!newName) {
+        alert('name cannot be empty');
+        return;
+      }
+
+      if (newName === originalName) {
+        cancelEdit(el, originalName);
+        return;
+      }
+
+      const res = await fetch('/api/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, key, newName })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        cell.dataset.original = newName;
+        // Update in allFiles array
+        const file = allFiles.find(f => f.url === '/' + key);
+        if (file) file.originalName = newName;
+        cancelEdit(el, newName);
+      } else {
+        alert('rename failed: ' + data.error);
+      }
     }
 
     function formatSize(bytes) {
@@ -582,6 +663,11 @@ POST /api/list
 POST /api/delete
   delete a file
   body: { "token": "your-token", "key": "abc123.png" }
+  response: { success: true }
+
+POST /api/rename
+  rename a file (update display name)
+  body: { "token": "your-token", "key": "abc123.png", "newName": "my-photo.png" }
   response: { success: true }
 `;
 }
